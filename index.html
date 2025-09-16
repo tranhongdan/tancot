@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Mô Hình Lượng Giác Tương Tác (Tan/Cot)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            background-color: #e5e7eb; /* gray-200 */
+            box-sizing: border-box;
+        }
+        canvas {
+            background-color: #f9fafb;
+            touch-action: none; /* Essential for drag interaction on touch devices */
+            display: block; /* Removes bottom space */
+        }
+        .control-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            border: 2px solid white;
+        }
+        .control-btn.inactive {
+            opacity: 0.5;
+            transform: scale(0.95);
+        }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gray-200 flex items-center justify-center p-4">
+
+    <main class="w-auto h-full flex flex-row gap-4">
+        <div id="circleContainer" class="h-full flex-shrink-0">
+            <canvas id="unitCircleCanvas" class="rounded-lg shadow-lg"></canvas>
+        </div>
+
+        <div id="graphContainer" class="h-full">
+            <canvas id="graphCanvas" class="rounded-lg shadow-lg"></canvas>
+        </div>
+    </main>
+
+    <div class="absolute bottom-4 right-4 flex flex-col gap-3">
+        <button id="toggleTanBtn" class="control-btn bg-green-600 hover:bg-green-700">Tan</button>
+        <button id="toggleCotBtn" class="control-btn bg-orange-500 hover:bg-orange-600">Cot</button>
+    </div>
+
+    <script>
+        // Canvases and Contexts
+        const circleCanvas = document.getElementById('unitCircleCanvas');
+        const graphCanvas = document.getElementById('graphCanvas');
+        const circleCtx = circleCanvas.getContext('2d');
+        const graphCtx = graphCanvas.getContext('2d');
+
+        // Controls
+        const toggleTanBtn = document.getElementById('toggleTanBtn');
+        const toggleCotBtn = document.getElementById('toggleCotBtn');
+
+        // Colors
+        const TAN_COLOR = '#16a34a'; // green-600
+        const COT_COLOR = '#f97316'; // orange-500
+        const AXIS_COLOR = '#4b5563'; // gray-600
+        const GUIDE_COLOR = '#9ca3af'; // gray-400
+        const ASYMPTOTE_COLOR = '#d1d5db'; // gray-300
+
+        // State
+        let angle = 45; // Initial angle in degrees
+        let isDragging = false;
+        let showTan = true;
+        let showCot = true;
+
+        function setupCanvases() {
+            const dpr = window.devicePixelRatio || 1;
+            
+            const circleContainer = document.getElementById('circleContainer');
+            const graphContainer = document.getElementById('graphContainer');
+            
+            // Determine sizes based on viewport height
+            const availableHeight = document.querySelector('main').clientHeight;
+            // Make circle container a square
+            const circleContainerWidth = availableHeight;
+            circleContainer.style.width = `${circleContainerWidth}px`;
+            
+            // Setup Circle Canvas
+            circleCanvas.width = circleContainerWidth * dpr;
+            circleCanvas.height = availableHeight * dpr;
+            circleCanvas.style.width = `${circleContainerWidth}px`;
+            circleCanvas.style.height = `${availableHeight}px`;
+            circleCtx.scale(dpr, dpr);
+
+            // Determine the scale from the circle canvas
+            const circleDrawableSize = Math.min(circleContainerWidth, availableHeight);
+            const unitScale = circleDrawableSize * 0.15; // This is our amplitude
+
+            // Calculate required graph width to fit exactly 2π
+            const xMargin = 35;
+            const rightPadding = 15; // Padding for the 2pi label
+            const requiredGraphWidth = xMargin + (2 * Math.PI * unitScale) + rightPadding;
+            graphContainer.style.width = `${requiredGraphWidth}px`;
+            
+            // Setup Graph Canvas
+            const graphWrapper = graphCanvas.parentElement;
+            graphCanvas.width = graphWrapper.clientWidth * dpr;
+            graphCanvas.height = graphWrapper.clientHeight * dpr;
+            graphCanvas.style.width = `${graphWrapper.clientWidth}px`;
+            graphCanvas.style.height = `${graphWrapper.clientHeight}px`;
+            graphCtx.scale(dpr, dpr);
+            
+            draw();
+        }
+
+        function draw() {
+            const dpr = window.devicePixelRatio || 1;
+            const angleRad = angle * Math.PI / 180;
+            
+            const circleDrawableSize = Math.min(circleCanvas.width / dpr, circleCanvas.height / dpr);
+            const unitScale = circleDrawableSize * 0.15; // Zoomed out scale
+
+            drawUnitCircle(angleRad, unitScale, dpr);
+            drawGraphs(angleRad, unitScale, dpr);
+        }
+
+        function drawUnitCircle(angleRad, radius, dpr) {
+            const width = circleCanvas.width / dpr;
+            const height = circleCanvas.height / dpr;
+            const centerX = width / 2;
+            const centerY = height / 2;
+            
+            circleCtx.clearRect(0, 0, width, height);
+
+            // Draw Axes
+            circleCtx.strokeStyle = AXIS_COLOR;
+            circleCtx.lineWidth = 1.5 / dpr;
+            circleCtx.beginPath();
+            circleCtx.moveTo(0, centerY); circleCtx.lineTo(width, centerY);
+            circleCtx.moveTo(centerX, 0); circleCtx.lineTo(centerX, height);
+            circleCtx.stroke();
+            
+            // Draw Tangent and Cotangent guide lines
+            circleCtx.strokeStyle = GUIDE_COLOR;
+            circleCtx.lineWidth = 1 / dpr;
+            circleCtx.setLineDash([2 / dpr, 3 / dpr]);
+            circleCtx.beginPath();
+            circleCtx.moveTo(centerX + radius, 0); circleCtx.lineTo(centerX + radius, height);
+            circleCtx.moveTo(0, centerY - radius); circleCtx.lineTo(width, centerY - radius);
+            circleCtx.stroke();
+            circleCtx.setLineDash([]);
+
+            // Draw Unit Circle
+            circleCtx.strokeStyle = AXIS_COLOR;
+            circleCtx.beginPath();
+            circleCtx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+            circleCtx.stroke();
+            
+            // === START: CORRECTED CODE FOR ANGLE MARKER ===
+            // Draw filled angle sector
+            const arcRadius = radius * 0.3; // Radius for the angle marker
+            circleCtx.fillStyle = '#d1d5db'; // gray-300
+            circleCtx.globalAlpha = 0.75; // Make it semi-transparent
+            circleCtx.beginPath();
+            circleCtx.moveTo(centerX, centerY);
+            // The last parameter 'true' makes it draw counter-clockwise, which is the correct mathematical direction for the angle.
+            circleCtx.arc(centerX, centerY, arcRadius, 0, -angleRad, true);
+            circleCtx.closePath();
+            circleCtx.fill();
+            circleCtx.globalAlpha = 1.0; // Reset alpha
+
+            // The separate arc outline has been removed as requested.
+
+            // Draw the angle label (θ) in the middle of the sector
+            const labelRadius = arcRadius * 0.6; // Position the label within the sector
+            const labelAngle = -angleRad / 2; // The angle for the midpoint of the arc
+            const labelX = centerX + labelRadius * Math.cos(labelAngle);
+            const labelY = centerY + labelRadius * Math.sin(labelAngle); // Canvas Y is inverted, so sin(negative) moves up
+            circleCtx.fillStyle = AXIS_COLOR;
+            circleCtx.font = `italic ${18 / dpr}px Inter`;
+            circleCtx.textAlign = 'center';
+            circleCtx.textBaseline = 'middle';
+            circleCtx.fillText('θ', labelX, labelY);
+            // === END: CORRECTED CODE FOR ANGLE MARKER ===
+
+            const cosA = Math.cos(angleRad);
+            const sinA = Math.sin(angleRad);
+            const x = centerX + radius * cosA;
+            const y = centerY - radius * sinA;
+            
+            // Draw extended line from center through point
+            const tanVal = sinA / cosA;
+            circleCtx.strokeStyle = GUIDE_COLOR;
+            circleCtx.lineWidth = 1 / dpr;
+            circleCtx.beginPath();
+            if (Math.abs(cosA) > 0.001) {
+                circleCtx.moveTo(centerX, centerY);
+                circleCtx.lineTo(centerX + width, centerY - width * tanVal);
+                circleCtx.moveTo(centerX, centerY);
+                circleCtx.lineTo(centerX - width, centerY + width * tanVal);
+            } else { // vertical line
+                circleCtx.moveTo(centerX, 0);
+                circleCtx.lineTo(centerX, height);
+            }
+            circleCtx.stroke();
+
+            // Draw Tangent visualization
+            if (showTan && Math.abs(cosA) > 0.001) {
+                const tanY = centerY - radius * tanVal;
+                circleCtx.strokeStyle = TAN_COLOR;
+                circleCtx.lineWidth = 4 / dpr;
+                circleCtx.beginPath();
+                circleCtx.moveTo(centerX + radius, centerY);
+                circleCtx.lineTo(centerX + radius, tanY);
+                circleCtx.stroke();
+            }
+
+            // Draw Cotangent visualization
+            if (showCot && Math.abs(sinA) > 0.001) {
+                const cotVal = cosA / sinA;
+                const cotX = centerX + radius * cotVal;
+                circleCtx.strokeStyle = COT_COLOR;
+                circleCtx.lineWidth = 4 / dpr;
+                circleCtx.beginPath();
+                circleCtx.moveTo(centerX, centerY - radius);
+                circleCtx.lineTo(cotX, centerY - radius);
+                circleCtx.stroke();
+            }
+
+            // Draw point on circle
+            circleCtx.fillStyle = '#111827'; // gray-900
+            circleCtx.beginPath();
+            circleCtx.arc(x, y, 6 / dpr, 0, 2 * Math.PI);
+            circleCtx.fill();
+        }
+
+        function drawGraphs(angleRad, amplitude, dpr) {
+            const width = graphCanvas.width / dpr;
+            const height = graphCanvas.height / dpr;
+            const centerY = height / 2;
+            const xMargin = 35;
+            const twoPiX = xMargin + (2 * Math.PI * amplitude); // Pixel coordinate for 2π
+
+            const availablePixelHeight = centerY * 0.9;
+            let Y_RANGE = Math.round(availablePixelHeight / amplitude);
+            if (Y_RANGE < 2) Y_RANGE = 2;
+
+            graphCtx.clearRect(0, 0, width, height);
+
+            // Draw Axes
+            graphCtx.strokeStyle = AXIS_COLOR;
+            graphCtx.lineWidth = 1.5 / dpr;
+            graphCtx.beginPath();
+            graphCtx.moveTo(0, centerY); graphCtx.lineTo(twoPiX, centerY); // Stop axis exactly at 2pi
+            graphCtx.moveTo(xMargin, 0); graphCtx.lineTo(xMargin, height);
+            graphCtx.stroke();
+
+            // Draw axis labels
+            graphCtx.fillStyle = AXIS_COLOR;
+            graphCtx.font = `${12 / dpr}px Inter`;
+            // Y-axis labels
+            graphCtx.textAlign = 'right';
+            graphCtx.textBaseline = 'middle';
+            for (let i = -Y_RANGE; i <= Y_RANGE; i++) {
+                if (i !== 0 && i % (Math.floor(Y_RANGE/5) || 1) === 0) { 
+                    graphCtx.fillText(i, xMargin - 8, centerY - i * amplitude);
+                }
+            }
+            
+            // X-axis labels (radians)
+            graphCtx.textBaseline = 'top';
+            // Handle 0 and π
+            graphCtx.textAlign = 'center';
+            graphCtx.fillText('0', xMargin, centerY + 5);
+            const piX = xMargin + Math.PI * amplitude;
+            graphCtx.fillText('π', piX, centerY + 5);
+            // Handle 2π specially to avoid clipping
+            graphCtx.textAlign = 'right'; 
+            graphCtx.fillText('2π', twoPiX, centerY + 5);
+
+
+            // Draw Asymptotes
+            graphCtx.strokeStyle = ASYMPTOTE_COLOR;
+            graphCtx.lineWidth = 1 / dpr;
+            graphCtx.setLineDash([4 / dpr, 4 / dpr]);
+            if(showTan) {
+                for (let i = 0.5; ; i+=1) {
+                    const xPos = xMargin + (i * Math.PI * amplitude);
+                    if (xPos >= twoPiX) break;
+                    graphCtx.beginPath(); graphCtx.moveTo(xPos, 0); graphCtx.lineTo(xPos, height); graphCtx.stroke();
+                }
+            }
+            if(showCot) {
+                for (let i = 1; ; i+=1) {
+                    const xPos = xMargin + (i * Math.PI * amplitude);
+                    if(xPos >= twoPiX) break;
+                    graphCtx.beginPath(); graphCtx.moveTo(xPos, 0); graphCtx.lineTo(xPos, height); graphCtx.stroke();
+                }
+            }
+            graphCtx.setLineDash([]);
+            
+             // Draw value projections on the graph's Y-axis
+            graphCtx.lineWidth = 4 / dpr;
+            const tanValRaw = Math.tan(angleRad);
+            const cotValRaw = 1 / tanValRaw;
+
+            if (showTan && Math.abs(tanValRaw) < Y_RANGE) {
+                const tanY_val = centerY - tanValRaw * amplitude;
+                graphCtx.strokeStyle = TAN_COLOR;
+                graphCtx.beginPath();
+                graphCtx.moveTo(xMargin, centerY);
+                graphCtx.lineTo(xMargin, tanY_val);
+                graphCtx.stroke();
+            }
+
+            if (showCot && Math.abs(cotValRaw) < Y_RANGE) {
+                const cotY_val = centerY - cotValRaw * amplitude;
+                graphCtx.strokeStyle = COT_COLOR;
+                graphCtx.beginPath();
+                graphCtx.moveTo(xMargin, centerY);
+                graphCtx.lineTo(xMargin, cotY_val);
+                graphCtx.stroke();
+            }
+
+            // Draw full wave guides (faint background)
+            if (showTan) drawTanCotWave(graphCtx, TAN_COLOR, Math.tan, true, width, height, xMargin, centerY, amplitude, Y_RANGE, twoPiX, 2 * Math.PI, dpr);
+            if (showCot) drawTanCotWave(graphCtx, COT_COLOR, (x) => 1 / Math.tan(x), true, width, height, xMargin, centerY, amplitude, Y_RANGE, twoPiX, 2 * Math.PI, dpr);
+            
+            // Draw traced waves (solid foreground)
+            if (showTan) drawTanCotWave(graphCtx, TAN_COLOR, Math.tan, false, width, height, xMargin, centerY, amplitude, Y_RANGE, twoPiX, angleRad, dpr);
+            if (showCot) drawTanCotWave(graphCtx, COT_COLOR, (x) => 1 / Math.tan(x), false, width, height, xMargin, centerY, amplitude, Y_RANGE, twoPiX, angleRad, dpr);
+            
+            // Draw current point and guides
+            const graphX = xMargin + angleRad * amplitude;
+            const tanVal = Math.tan(angleRad);
+            const tanY = centerY - tanVal * amplitude;
+            const cotVal = 1 / Math.tan(angleRad);
+            const cotY = centerY - cotVal * amplitude;
+            
+            // Draw guide lines first
+            graphCtx.setLineDash([4 / dpr, 4 / dpr]);
+            graphCtx.lineWidth = 1 / dpr;
+            graphCtx.strokeStyle = GUIDE_COLOR;
+
+            if (showTan && Math.abs(tanVal) < Y_RANGE * 1.1 && graphX < twoPiX) {
+                graphCtx.beginPath(); graphCtx.moveTo(graphX, tanY); graphCtx.lineTo(graphX, centerY); graphCtx.stroke();
+                graphCtx.beginPath(); graphCtx.moveTo(graphX, tanY); graphCtx.lineTo(xMargin, tanY); graphCtx.stroke();
+            }
+            
+            if (showCot && Math.abs(cotVal) < Y_RANGE * 1.1 && graphX < twoPiX) {
+                graphCtx.beginPath(); graphCtx.moveTo(graphX, cotY); graphCtx.lineTo(graphX, centerY); graphCtx.stroke();
+                graphCtx.beginPath(); graphCtx.moveTo(graphX, cotY); graphCtx.lineTo(xMargin, cotY); graphCtx.stroke();
+            }
+            graphCtx.setLineDash([]);
+
+            // Draw points on top of guide lines
+            if (showTan && Math.abs(tanVal) < Y_RANGE * 1.1 && graphX < twoPiX) {
+                graphCtx.fillStyle = TAN_COLOR;
+                graphCtx.beginPath();
+                graphCtx.arc(graphX, tanY, 5 / dpr, 0, 2 * Math.PI);
+                graphCtx.fill();
+            }
+            
+            if (showCot && Math.abs(cotVal) < Y_RANGE * 1.1 && graphX < twoPiX) {
+                graphCtx.fillStyle = COT_COLOR;
+                graphCtx.beginPath();
+                graphCtx.arc(graphX, cotY, 5 / dpr, 0, 2 * Math.PI);
+                graphCtx.fill();
+            }
+        }
+
+        function drawTanCotWave(ctx, color, func, isGuide, width, height, xMargin, centerY, amplitude, yRange, limitX, traceLimitRad, dpr) {
+            ctx.strokeStyle = color;
+            if (isGuide) {
+                ctx.lineWidth = 1 / dpr;
+                ctx.globalAlpha = 0.3;
+            } else {
+                ctx.lineWidth = 3 / dpr;
+                ctx.globalAlpha = 1.0;
+            }
+
+            ctx.beginPath();
+            const graphPixelWidth = Math.min(limitX - xMargin, width - xMargin);
+            let lastVal = null;
+
+            for (let i = 0; i <= graphPixelWidth; i++) {
+                const x = xMargin + i;
+                const rad = i / amplitude;
+
+                if (rad > traceLimitRad) break;
+                
+                if (rad === 0) continue;
+
+                const val = func(rad);
+                const y = centerY - val * amplitude;
+                
+                const isDiscontinuous = lastVal !== null && Math.abs(val) > yRange * 1.5 && Math.sign(val) !== Math.sign(lastVal);
+                
+                if (i === 1 || isDiscontinuous) {
+                    ctx.moveTo(x, y);
+                } else {
+                     ctx.lineTo(x, y);
+                }
+                lastVal = val;
+            }
+            ctx.stroke();
+            ctx.globalAlpha = 1.0; // Reset alpha
+        }
+        
+        function updateAngleFromPointer(e) {
+            const rect = circleCanvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            
+            const x = clientX - rect.left;
+            const y = clientY - rect.top;
+            
+            const dpr = window.devicePixelRatio || 1;
+            const centerX = circleCanvas.width / dpr / 2;
+            const centerY = circleCanvas.height / dpr / 2;
+
+            const angleRad = Math.atan2(-(y - centerY), x - centerX);
+            let currentDeg = angleRad * 180 / Math.PI;
+            if (currentDeg < 0) { currentDeg += 360; }
+
+            const specialAngles = [0, 30, 45, 60, 90, 120, 135, 150, 180, 210, 225, 240, 270, 300, 315, 330, 360];
+            const snapThreshold = 3; // degrees
+
+            let snapped = false;
+            for (const specialAngle of specialAngles) {
+                if (Math.abs(currentDeg - specialAngle) < snapThreshold) {
+                    angle = specialAngle;
+                    snapped = true;
+                    break;
+                }
+            }
+            
+            if (!snapped) {
+                angle = currentDeg;
+            }
+
+            // Prevent getting stuck exactly on an asymptote by adding a tiny offset
+            if (angle === 90 || angle === 270) angle += 0.01;
+            if (angle === 0 || angle === 180 || angle === 360) angle += 0.01;
+            
+            draw();
+        }
+
+        // --- Event Listeners ---
+        circleCanvas.addEventListener('pointerdown', (e) => {
+            isDragging = true;
+            circleCanvas.setPointerCapture(e.pointerId);
+            updateAngleFromPointer(e);
+        });
+
+        circleCanvas.addEventListener('pointermove', (e) => {
+            if (isDragging) {
+                updateAngleFromPointer(e);
+            }
+        });
+
+        circleCanvas.addEventListener('pointerup', (e) => {
+            isDragging = false;
+            circleCanvas.releasePointerCapture(e.pointerId);
+
+        });
+
+        toggleTanBtn.addEventListener('click', () => {
+            showTan = !showTan;
+            toggleTanBtn.classList.toggle('inactive', !showTan);
+            draw();
+        });
+
+        toggleCotBtn.addEventListener('click', () => {
+            showCot = !showCot;
+            toggleCotBtn.classList.toggle('inactive', !showCot);
+            draw();
+        });
+        
+        window.addEventListener('resize', setupCanvases);
+
+        // Initial setup
+        setupCanvases();
+    </script>
+</body>
+</html>
