@@ -189,7 +189,7 @@
             const labelX = centerX + labelRadius * Math.cos(labelAngle);
             const labelY = centerY + labelRadius * Math.sin(labelAngle); // Canvas Y is inverted, so sin(negative) moves up
             circleCtx.fillStyle = AXIS_COLOR;
-            circleCtx.font = `italic ${18 / dpr}px Inter`;
+            circleCtx.font = `italic ${25 / dpr}px Inter`;
             circleCtx.textAlign = 'center';
             circleCtx.textBaseline = 'middle';
             circleCtx.fillText('θ', labelX, labelY);
@@ -269,7 +269,7 @@
 
             // Draw axis labels
             graphCtx.fillStyle = AXIS_COLOR;
-            graphCtx.font = `${12 / dpr}px Inter`;
+            graphCtx.font = `${25 / dpr}px Inter`;
             // Y-axis labels
             graphCtx.textAlign = 'right';
             graphCtx.textBaseline = 'middle';
@@ -495,4 +495,5 @@
         setupCanvases();
     </script>
 </body>
+
 </html>
